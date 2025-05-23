@@ -8,4 +8,4 @@
 *.tar
 .Rhistory
 BayesianAnalysis/LMAnalysis.R
-.tiff
+*.tiff

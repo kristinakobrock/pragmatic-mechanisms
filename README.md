@@ -1,7 +1,6 @@
-# emergent-pragmatics
+# emergent-pragmatics [![DOI](https://zenodo.org/badge/986911991.svg)](https://doi.org/10.5281/zenodo.15497186)
 
 Implementation of an agent-based model that allows to experiment with the role of pragmatic mechanisms in a language emergence paradigm using [EGG](https://github.com/facebookresearch/EGG/tree/main). The implementation builds on the [concept-level reference game](https://github.com/kristinakobrock/context-shapes-language) by Kobrock et al. which builds on the [hierarchical reference game](https://github.com/XeniaOhmer/hierarchical_reference_game/tree/master) by Ohmer et al. (2022) and the [concept game](https://github.com/jayelm/emergent-generalization/tree/master) by Mu & Goodman (2021).
-[![DOI](https://zenodo.org/badge/986911991.svg)](https://doi.org/10.5281/zenodo.15497186)
 
 ## Installing dependencies
 We used Python 3.9.15 and PyTorch 1.13.0. Generally, the minimal requirements are Python 3.6 and PyTorch 1.1.0.

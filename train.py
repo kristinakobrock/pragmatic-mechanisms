@@ -10,7 +10,6 @@ import torch.nn.functional as F
 import egg.core as core
 from egg.core.language_analysis import TopographicSimilarity
 
-from create_datasets import load_or_create_dataset
 # copy language_analysis_local from hierarchical_reference_game
 from language_analysis_local import *
 import os
@@ -18,9 +17,7 @@ import pickle
 
 import dataset
 from archs import Sender, Receiver, RSASender
-from archs_mu_goodman import Speaker, Listener
 from rsa_tools import get_utterances
-import feature
 import itertools
 import time
 
@@ -40,9 +37,9 @@ def get_params(params):
     parser.add_argument('--game_size', type=int, default=10)
     parser.add_argument('--scaling_factor', type=int, default=10,
                         help='For scaling up the symbolic datasets.')
-    parser.add_argument('--vocab_size_factor', type=int, default=3,
+    parser.add_argument('--vocab_size_factor', type=int, default=0,
                         help='Factor applied to minimum vocab size to calculate actual vocab size')
-    parser.add_argument('--vocab_size_user', type=int, default=16,
+    parser.add_argument('--vocab_size_user', type=int, default=5,
                         help='Determines the vocab size. Use only if vocab size factor is None.')
     parser.add_argument('--hidden_size', type=int, default=128,
                         help='Size of the hidden layer of Sender and Receiver,\
@@ -55,44 +52,28 @@ def get_params(params):
                         help="Learning rate for Sender's and Receiver's parameters ")
     parser.add_argument('--temperature', type=float, default=2,
                         help="Starting GS temperature for the sender")
-    parser.add_argument('--length_cost', type=float, default=0.0,
+    parser.add_argument('--length_cost', type=float, default=0.001,
                         help="linear cost term per message length")
     parser.add_argument('--temp_update', type=float, default=0.99,
                         help="Minimum is 0.5")
     parser.add_argument('--save', type=bool, default=False, help="If set results are saved")
     parser.add_argument('--num_of_runs', type=int, default=1, help="How often this simulation should be repeated")
-    parser.add_argument('--zero_shot', type=bool, default=False,
-                        help="If set then zero_shot dataset will be trained and tested")
-    parser.add_argument('--zero_shot_test', type=str, default=None,
-                        help="Must be either 'generic' or 'specific'.")
     parser.add_argument('--device', type=str, default='cuda',
                         help="Specifies the device for tensor computations. Defaults to 'cuda'.")
     parser.add_argument('--path', type=str, default="",
                         help="Path where to save the results - needed for running on HPC3.")
-    parser.add_argument('--include_concept', type=bool, default=False,
-                        help="Not implemented yet: If set to True, then full concepts will be created and preserved during training (opposed to preserving only targets and regenerating concepts after training)")
     parser.add_argument('--context_unaware', type=bool, default=False,
                         help="If set to True, then the speakers will be trained context-unaware, i.e. without access to the distractors.")
-    parser.add_argument('--max_mess_len', type=int, default=None,
+    parser.add_argument('--max_mess_len', type=int, default=20,
                         help="Allows user to specify a maximum message length. (defaults to the number of attributes in a dataset)")
-    parser.add_argument('--mu_and_goodman', type=bool, default=False,
-                        help="Use for baselining against Mu and Goodman (2021) setting.")
-    parser.add_argument("--speaker_hidden_size", default=128, type=int,
-                        help="Use for baselining against Mu and Goodman (2021) setting.")
-    parser.add_argument("--listener_hidden_size", default=128, type=int,
-                        help="Use for baselining against Mu and Goodman (2021) setting.")
-    parser.add_argument("--speaker_n_layers", default=2, type=int,
-                        help="Use for baselining against Mu and Goodman (2021) setting.")
-    parser.add_argument("--listener_n_layers", default=2, type=int,
-                        help="Use for baselining against Mu and Goodman (2021) setting.")
-    parser.add_argument("--early_stopping", type=bool, default=False,
+    parser.add_argument("--early_stopping", type=bool, default=True,
                         help="Use for early stopping with loss, specify patience and min_delta for correct usage.")
     parser.add_argument("--patience", type=int, default=10,
                         help="How many epochs to wait for a significant improvement of loss before early stopping.")
     parser.add_argument("--min_delta", type=float, default=0.001,
                         help="How much of an improvement to consider a significant improvement of loss before early "
                              "stopping.")
-    parser.add_argument("--min_acc_early_stopping", type=float, default=0.00,
+    parser.add_argument("--min_acc_early_stopping", type=float, default=0.90,
                         help="Minimum validation accuracy that needs to reached before early stopping can apply.")
     parser.add_argument("--save_test_interactions", type=bool, default=False,
                         help="Use to save test interactions.")
@@ -101,9 +82,6 @@ def get_params(params):
                              "scenarios).")
     parser.add_argument("--load_checkpoint", type=bool, default=False,
                         help="Skip training and load pretrained models from checkpoint.")
-    # parser.add_argument("--load_interaction", type=bool, default=False,
-    #                     help="If given, load all interactions from previous runs in the folder. Else, take interaction"
-    #                          "from the current run.")
     parser.add_argument("--load_interaction", type=str, default=None,
                         help="If given, load interaction from 'train', 'validation' or 'test' run.")
     parser.add_argument("--limit_utterances", type=int, default=0,
@@ -113,17 +91,15 @@ def get_params(params):
                              "0 means the whole test dataset is used.")
     parser.add_argument("--test_rsa", type=str, default=None,
                         help="Use for testing the RSA speaker after training. Can be 'train', 'validation' or 'test'.")
-    parser.add_argument("--cost-factor", type=float, default=0.01,
+    parser.add_argument("--cost-factor", type=float, default=1,
                         help="Used for RSA test. Factor for the message length cost in utility.")
-    parser.add_argument('--sample_context', type=bool, default=False,
+    parser.add_argument('--sample_context', type=bool, default=True,
                         help="Use for sampling context condition in dataset generation. (Otherwise, each context "
                              "condition is added for each concept.)")
+    parser.add_argument('--shared_context', type=bool, default=True,
+                        help='Use for generating datasets with a shared context.')
     parser.add_argument('--granularity', type=str, default='mixed',
                         help='Granularity of the context. Possible values are: mixed, coarse and fine')
-    parser.add_argument('--shapes3d', type=bool, default=False,
-                        help="Determines whether 3dshapes dataset will be used or not")
-    parser.add_argument('--shared_context', type=bool, default=False,
-                        help='Use for generating datasets with a shared context.')
 
     args = core.init(parser, params)
 
@@ -188,29 +164,8 @@ def train(opts, datasets, verbose_callbacks=False):
     test = torch.utils.data.DataLoader(test, batch_size=opts.batch_size, shuffle=False)
 
     # initialize sender and receiver agents
-    if opts.mu_and_goodman:
-        # use speaker hidden size also for listener (except explicitly given)
-        if not opts.listener_hidden_size:
-            opts.listener_hidden_size = opts.speaker_hidden_size
-        sender = Speaker(feature.FeatureMLP(
-            input_size=sum(dimensions),
-            output_size=int(opts.speaker_hidden_size / 2),
-            # divide by 2 to allow for concatenating prototype embeddings
-            n_layers=opts.speaker_n_layers,
-        ), n_targets=opts.game_size)
-        receiver = Listener(feature.FeatureMLP(
-            input_size=sum(dimensions),
-            output_size=opts.listener_hidden_size,
-            n_layers=opts.listener_n_layers,
-        ))
-    else:
-        if opts.shapes3d:
-            # hard coded number of features for the feature representations at the moment
-            sender = Sender(opts.hidden_size, 100, opts.game_size, opts.context_unaware, shapes3d=opts.shapes3d)
-            receiver = Receiver(100, opts.hidden_size, shapes3d=opts.shapes3d)
-        else:
-            sender = Sender(opts.hidden_size, sum(dimensions), opts.game_size, opts.context_unaware)
-            receiver = Receiver(sum(dimensions), opts.hidden_size)
+    sender = Sender(opts.hidden_size, sum(dimensions), opts.game_size, opts.context_unaware)
+    receiver = Receiver(sum(dimensions), opts.hidden_size)
 
     if opts.vocab_size_factor != 0:
         minimum_vocab_size = dimensions[0] + 1  # plus one for 'any'
@@ -227,8 +182,6 @@ def train(opts, datasets, verbose_callbacks=False):
     print("message length", max_len)
 
     # initialize game
-    if opts.mu_and_goodman:
-        opts.hidden_size = opts.speaker_hidden_size
     sender = core.RnnSenderGS(sender,
                               vocab_size,
                               int(opts.hidden_size / 2),
@@ -315,8 +268,6 @@ def train(opts, datasets, verbose_callbacks=False):
                 # Load given interaction
                 interaction = torch.load(opts.interaction_path)
                 print("# loading interaction from", opts.interaction_path)
-            # TODO: specify third case: either interactions are loaded, or the current interaction is used, or generate
-            # utterances
             else:
                 interaction = None
 
@@ -367,21 +318,11 @@ def main(params):
     """
     opts = get_params(params)
 
-    # NOTE: I checked and the default device seems to be cuda
-    # Otherwise there is an option in a later pytorch version (don't know about compatibility with egg):
-    # torch.set_default_device(opts.device)
-
-    # has to be executed in Project directory for consistency
-    # assert os.path.split(os.getcwd())[-1] == 'emergent-abstractions'
-
     # dimensions calculated from attribute-value pairs:
     if not opts.dimensions:
         opts.dimensions = list(itertools.repeat(opts.values, opts.attributes))
 
     data_set_name = '(' + str(len(opts.dimensions)) + ',' + str(opts.dimensions[0]) + ')'
-    if opts.shapes3d:
-        data_set_name = 'shapes3d_feat_rep'
-        opts.game_size = 4
     folder_name = (data_set_name + '_game_size_' + str(opts.game_size)
                    + '_vsf_' + str(opts.vocab_size_factor))
     folder_name = os.path.join("results", folder_name)
@@ -394,8 +335,6 @@ def main(params):
                 opts.game_setting = 'length_cost/context_unaware'
             else:
                 opts.game_setting = 'length_cost/no_cost_context_unaware'
-    elif opts.mu_and_goodman:
-        opts.game_setting = 'mu_and_goodman'
     else:
         opts.game_setting = 'standard'
         if opts.length_cost:
@@ -407,40 +346,28 @@ def main(params):
         opts.game_setting = opts.game_setting + '/shared_context'
 
     # create subfolders if necessary
-    # The granularity subfolders are created only when the granularity is not 'mixed'
-    if opts.granularity != 'mixed' and not opts.zero_shot and not opts.test_rsa:
-        granularity_subfolder = f"granularity_{opts.granularity}"
-        opts.game_path = os.path.join(opts.path, folder_name, opts.game_setting, granularity_subfolder)
-    elif opts.sample_context and not opts.zero_shot:
-        sample_context_subfolder = "sampled_context"
-        opts.game_path = os.path.join(opts.path, folder_name, opts.game_setting, sample_context_subfolder)
-    else:
-        opts.game_path = os.path.join(opts.path, folder_name, opts.game_setting)
+    opts.game_path = os.path.join(opts.path, folder_name, opts.game_setting)
     opts.save_path = opts.game_path  # Keep game path for calculating which run, i.e. folder to save in
 
     # if name of precreated data set is given, load dataset
     if opts.load_dataset:
         data_set = torch.load(opts.path + 'data/' + opts.load_dataset)
         print('data loaded from: ' + 'data/' + opts.load_dataset)
-        if not opts.zero_shot:
-            # create subfolder if necessary
-            if not os.path.exists(opts.save_path) and opts.save:
-                os.makedirs(opts.save_path)
+        # create subfolder if necessary
+        if not os.path.exists(opts.save_path) and opts.save:
+            os.makedirs(opts.save_path)
 
     for run in range(opts.num_of_runs):
 
         # if not given, generate data set (new for each run for the small datasets)
-        if not opts.load_dataset and not opts.zero_shot:
-            if opts.shapes3d:
-                data_set = load_or_create_dataset('dataset/shapes3d_feat_rep', device=opts.device)
-            else:
-                data_set = dataset.DataSet(opts.dimensions,
-                                           game_size=opts.game_size,
-                                           scaling_factor=opts.scaling_factor,
-                                           device=opts.device,
-                                           sample_context=opts.sample_context,
-                                           granularity=opts.granularity,
-                                           shared_context=opts.shared_context)
+        if not opts.load_dataset:
+            data_set = dataset.DataSet(opts.dimensions,
+                                       game_size=opts.game_size,
+                                       scaling_factor=opts.scaling_factor,
+                                       device=opts.device,
+                                       sample_context=opts.sample_context,
+                                       granularity=opts.granularity,
+                                       shared_context=opts.shared_context)
 
             # save folder for opts rsa is already specified above
             if not opts.test_rsa and not opts.save_test_interactions:
@@ -449,169 +376,51 @@ def main(params):
             if not os.path.exists(opts.save_path) and opts.save:
                 os.makedirs(opts.save_path)
 
-        if not opts.zero_shot:
-            # set checkpoint path
-            if opts.load_checkpoint:
-                opts.checkpoint_path = os.path.join(opts.game_path, str(run), 'final.tar')
-                if not os.path.exists(opts.checkpoint_path):
-                    raise ValueError(
-                        f"Checkpoint file {opts.checkpoint_path} not found.")
+        # set checkpoint path
+        if opts.load_checkpoint:
+            opts.checkpoint_path = os.path.join(opts.game_path, str(run), 'final.tar')
+            if not os.path.exists(opts.checkpoint_path):
+                raise ValueError(
+                    f"Checkpoint file {opts.checkpoint_path} not found.")
 
-            # set interaction path
-            if opts.load_interaction:
-                if opts.early_stopping:
-                    path_to_run = os.path.join(opts.game_path, str(run))
-                    with open(os.path.join(path_to_run, 'loss_and_metrics.pkl'), 'rb') as input_file:
-                        data = pickle.load(input_file)
-                        final_epoch = max(data['loss_train'].keys())
-                    opts.n_epochs = final_epoch
-                    if not opts.load_interaction == 'validation' and not opts.load_interaction == 'train':
-                        n_epoch = 0
-                    else:
-                        n_epoch = final_epoch
-                    opts.interaction_path = os.path.join(opts.game_path, str(run), 'interactions', opts.load_interaction,
-                                                         'epoch_' +
-                                                         str(n_epoch), 'interaction_gpu0')
+        # set interaction path
+        if opts.load_interaction:
+            if opts.early_stopping:
+                path_to_run = os.path.join(opts.game_path, str(run))
+                with open(os.path.join(path_to_run, 'loss_and_metrics.pkl'), 'rb') as input_file:
+                    data = pickle.load(input_file)
+                    final_epoch = max(data['loss_train'].keys())
+                opts.n_epochs = final_epoch
+                if not opts.load_interaction == 'validation' and not opts.load_interaction == 'train':
+                    n_epoch = 0
                 else:
-                    opts.interaction_path = os.path.join(opts.game_path, str(run), 'interactions',
-                                                         opts.load_interaction,
-                                                         'epoch_' +
-                                                         str(opts.n_epochs), 'interaction_gpu0')
+                    n_epoch = final_epoch
+                opts.interaction_path = os.path.join(opts.game_path, str(run), 'interactions', opts.load_interaction,
+                                                     'epoch_' +
+                                                     str(n_epoch), 'interaction_gpu0')
+            else:
+                opts.interaction_path = os.path.join(opts.game_path, str(run), 'interactions',
+                                                     opts.load_interaction,
+                                                     'epoch_' +
+                                                     str(opts.n_epochs), 'interaction_gpu0')
 
         # if test_rsa is given, validate and setup interactions
         if opts.test_rsa:
-            # if opts.test_rsa == 'train' or opts.test_rsa == 'validation' or opts.test_rsa == 'test':
-            if opts.test_rsa:
-                # create subfolder if necessary
-                opts.save_path = os.path.join(opts.game_path, str(run))
-                if not os.path.exists(opts.save_path) and opts.save:
-                    os.makedirs(opts.save_path)
-            # else:
-            #     raise ValueError("--test_rsa must be 'train', 'validation', or 'test'")
+            # create subfolder if necessary
+            opts.save_path = os.path.join(opts.game_path, str(run))
+            if not os.path.exists(opts.save_path) and opts.save:
+                os.makedirs(opts.save_path)
 
         if opts.save_test_interactions:
             # create subfolder if necessary
-            if opts.zero_shot:
-                opts.save_interactions_path = os.path.join(opts.game_path, 'zero_shot',
-                                                  opts.zero_shot_test, str(run), "interactions")
-                opts.save_path = os.path.join(opts.game_path, 'zero_shot', opts.zero_shot_test, str(run))
-            elif opts.test_rsa:
+            if opts.test_rsa:
                 opts.save_interactions_path = os.path.join(opts.game_path, str(run), 'interactions')
             else:
                 opts.save_interactions_path = os.path.join(opts.game_path, str(run), 'interactions')
             if not os.path.exists(opts.save_interactions_path) and opts.save:
                 os.makedirs(opts.save_interactions_path)
 
-        # zero-shot                
-        if opts.zero_shot:
-            # either the zero-shot test condition is given (with pre-generated dataset)
-            if opts.zero_shot_test is not None:
-                if not opts.save_test_interactions:
-                    opts.zs_game_path = os.path.join(opts.game_path, 'zero_shot', opts.zero_shot_test)
-                    # create subfolder if necessary
-                    if opts.granularity != 'mixed':
-                        granularity_subfolder = f"granularity_{opts.granularity}"
-                        opts.save_path = os.path.join(opts.zs_game_path, granularity_subfolder, str(run))
-                    elif opts.sample_context:
-                        opts.save_path = os.path.join(opts.zs_game_path, "sampled_context", str(run))
-                    elif opts.granularity == 'mixed' and not opts.sample_context:
-                        opts.save_path = os.path.join(opts.zs_game_path, str(run))
-
-                if not os.path.exists(opts.save_path) and opts.save:
-                    os.makedirs(opts.save_path)
-                if not opts.load_dataset:
-                    if opts.shapes3d:
-                        data_set = load_or_create_dataset('./dataset/feat_rep_zero_concept_dataset')
-                    else:
-                        data_set = dataset.DataSet(opts.dimensions,
-                                                   game_size=opts.game_size,
-                                                   scaling_factor=opts.scaling_factor,
-                                                   device=opts.device,
-                                                   zero_shot=True,
-                                                   zero_shot_test=opts.zero_shot_test,
-                                                   sample_context=opts.sample_context,
-                                                   granularity=opts.granularity)
-            # or both test conditions are generated        
-            else:
-                # implement two zero-shot conditions: test on most generic vs. test on most specific dataset
-                for cond in ['generic', 'specific']:
-                    print("Zero-shot condition:", cond)
-                    # create subfolder if necessary
-                    opts.zs_game_path = os.path.join(opts.game_path, 'zero_shot', cond)
-                    if opts.granularity != 'mixed':
-                        granularity_subfolder = f"granularity_{opts.granularity}"
-                        opts.save_path = os.path.join(opts.zs_game_path, granularity_subfolder, str(run))
-                    elif opts.sample_context:
-                        opts.save_path = os.path.join(opts.zs_game_path, "context_sampled", str(run))
-                    if not os.path.exists(opts.save_path) and opts.save:
-                        os.makedirs(opts.save_path)
-                    if opts.shapes3d:
-                        data_set = load_or_create_dataset('./dataset/feat_rep_zero_concept_dataset')
-                    else:
-                        data_set = dataset.DataSet(opts.dimensions,
-                                                   game_size=opts.game_size,
-                                                   scaling_factor=opts.scaling_factor,
-                                                   device=opts.device,
-                                                   zero_shot=True,
-                                                   zero_shot_test=cond,
-                                                   sample_context=opts.sample_context,
-                                                   granularity=opts.granularity)
-                    train(opts, data_set, verbose_callbacks=False)
-
-            # set checkpoint path
-            if opts.load_checkpoint:
-                opts.checkpoint_path = os.path.join(opts.save_path, 'final.tar')
-                if not os.path.exists(opts.checkpoint_path):
-                    raise ValueError(
-                        f"Checkpoint file {opts.checkpoint_path} not found.")
-
-            # set interaction path
-            if opts.load_interaction:
-                if opts.early_stopping:
-                    if opts.zero_shot:
-                        opts.zs_game_path = os.path.join(opts.game_path, 'zero_shot', opts.zero_shot_test)
-                        path_to_run = os.path.join(opts.zs_game_path, str(run))
-                    else:
-                        path_to_run = os.path.join(opts.game_path, str(run))
-                    with open(os.path.join(path_to_run, 'loss_and_metrics.pkl'), 'rb') as input_file:
-                        data = pickle.load(input_file)
-                        final_epoch = max(data['loss_train'].keys())
-                    opts.n_epochs = final_epoch
-                    if not opts.load_interaction == 'validation' and not opts.load_interaction == 'train':
-                        n_epoch = 0
-                    else:
-                        n_epoch = final_epoch
-                    if opts.zero_shot:
-                        opts.interaction_path = os.path.join(opts.zs_game_path, str(run), 'interactions',
-                                                             opts.load_interaction,
-                                                             'epoch_' +
-                                                             str(n_epoch), 'interaction_gpu0')
-                    else:
-                        opts.interaction_path = os.path.join(opts.game_path, str(run), 'interactions',
-                                                             opts.load_interaction,
-                                                             'epoch_' +
-                                                             str(n_epoch), 'interaction_gpu0')
-                else:
-                    if opts.zero_shot:
-                        opts.zs_game_path = os.path.join(opts.game_path, 'zero_shot', opts.zero_shot_test)
-                        opts.interaction_path = os.path.join(opts.zs_game_path, str(run), 'interactions',
-                                                             opts.load_interaction,
-                                                             'epoch_' +
-                                                             str(opts.n_epochs), 'interaction_gpu0')
-                    else:
-                        opts.interaction_path = os.path.join(opts.game_path, str(run), 'interactions',
-                                                             opts.load_interaction,
-                                                             'epoch_' +
-                                                             str(opts.n_epochs), 'interaction_gpu0')
-                #opts.interaction_path = os.path.join(opts.save_path, 'interactions', opts.load_interaction,
-                #                                     'epoch_' +
-                #                                     str(opts.save_epochs), 'interaction_gpu0')
-                if not os.path.exists(opts.interaction_path):
-                    raise ValueError(
-                        f"Interaction file {opts.interaction_path} not found.")
-
-        if opts.zero_shot_test != None or not opts.zero_shot:
-            train(opts, data_set, verbose_callbacks=False)
+        train(opts, data_set, verbose_callbacks=False)
 
 
 if __name__ == "__main__":

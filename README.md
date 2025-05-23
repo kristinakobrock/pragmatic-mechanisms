@@ -1,15 +1,14 @@
-# pragmatic-mechanisms
+# emergent-pragmatics
 
-Implementation of a concept-level reference game in a language emergence paradigm using [EGG](https://github.com/facebookresearch/EGG/tree/main). The implementation builds on the [hierarchical reference game](https://github.com/XeniaOhmer/hierarchical_reference_game/tree/master) by Ohmer et al. (2022) and the [concept game](https://github.com/jayelm/emergent-generalization/tree/master) by Mu & Goodman (2021). A first abstract of this research has been published at the workshop 'Procedural and computational models of semantic and pragmatic processes' held at the 34th European Summer School in Logic, Language and Information (ESSLLI) at University of Ljubljana, Faculty of Computer and Information Science from 31 July – 4 August 2023: Kristina Kobrock, Xenia Ohmer, Elia Bruni and Nicole Gotzner (2023): [Pragmatics in referential communication: An investigation of concept
-communication and the role of pragmatics with an emergent communication game](https://prosandcomps.github.io/assets/pdf/abstracts/ProsComps2023_Kobrock.pdf).
+Implementation of an agent-based model that allows to experiment with the role of pragmatic mechanisms in a language emergence paradigm using [EGG](https://github.com/facebookresearch/EGG/tree/main). The implementation builds on the [concept-level reference game](https://github.com/kristinakobrock/context-shapes-language) by Kobrock et al. which builds on the [hierarchical reference game](https://github.com/XeniaOhmer/hierarchical_reference_game/tree/master) by Ohmer et al. (2022) and the [concept game](https://github.com/jayelm/emergent-generalization/tree/master) by Mu & Goodman (2021).
 
 ## Installing dependencies
 We used Python 3.9.15 and PyTorch 1.13.0. Generally, the minimal requirements are Python 3.6 and PyTorch 1.1.0.
 `requirements.txt` lists the python packages needed to run this code. Additionally, please make sure you install EGG following the instructions [here](https://github.com/facebookresearch/EGG#installing-egg).
 1. (optional) Create a new conda environement:
 ```
-conda create --name emergab python=3.9
-conda activate emergab
+conda create --name emergprag python=3.9
+conda activate emergprag
 ```
 2. EGG can be installed as a package to be used as a library (see [here](https://github.com/facebookresearch/EGG#installing-egg) for more options):
 ```
@@ -24,9 +23,9 @@ pip install -r requirements.txt
 
 Agents can be trained using 'train.py'. The file provides explanations for how to configure agents and training using command line parameters.
 
-For example, to train the agents on data set D(4,8) (4 attributes, 8 values) with vocab size factor 3 (default), using the same hyperparameters as in the paper, you can execute
+For example, to train the agents on data set D(4,8) (4 attributes, 8 values), using the same hyperparameters as in the paper, you can execute
 
-`python train.py --dimensions 8 8 8 8 --n_epochs 300 --batch_size 32`
+`python train.py --dimensions 8 8 8 8 --n_epochs 300 --batch_size 16`
 
 Similarly, for data set D(3, 4), the dimensions flag would be
 
@@ -40,14 +39,32 @@ If you would like to save the results (interaction file, agent checkpoints, a fi
 
 `--save True`
 
+By default, agents are trained in the context-aware condition. If you would like to train in the context-unaware (baseline) condition, you can specify the flag
+
+`--context_unaware True`
+
+For reproducibility reasons, the symbolic datasets can be pre-generated with the file `pickle_ds.py` and saved. For training, they can be loaded:
+
+`--load_dataset dim(3,4)_context_sampled_shared_context_sf10.ds`
+
+## Inference
+
+To test the trained agents on the test dataset, we load the trained model (checkpoint), save the test interactions as 'test' and use a larger batch size and again load the respective dataset.
+
+`--load_checkpoint True --save_test_interactions True --save_test_interactions_as test --batch_size 256 --load_dataset dim(3,4)_context_sampled_shared_context_sf10.ds`
+
+To test the trained agents with RSA, we use the same inference procedure as for testing without RSA. Additionally, we load the train interactions (for calculating utilities of the messages) and specify the dataset split on which the inference should be done.
+
+`--load_interaction train --test_rsa test`
+
+To speed up the RSA inference, the test dataset can be limited to a certain number. We have used this setting for large datasets:
+
+`--limit_test_ds 1000`
+
 ## Evaluation
 
 Our results can be found in 'results/'. The subfolders contain the metrics for each run. We stored the final interaction for each run which logs all game-relevant information such as sender input, messages, receiver input, and receiver selections for the training and validation set. Based on these interactions, we evaluated additional metrics after training using the notebook 'evaluate_metrics.ipynb'. We uploaded all metrics but not the interaction files due to their large size.
 
 ## Visualization
 
-Visualizations of training and results can be found in the notebooks 'analysis.ipynb' and 'analysis_qualitative.ipynb'. The former reports all results for the 6 different data sets (D(3,4), D(3,8), D(3,16), D(4,4), D(4,8), D(5,4)). The latter contains code to extract message-concept pairs from the interactions and evaluate qualitatively which messages have been produced to refer to which concept in which context condition.
-
-## Grid search results
-
-The folder 'grid_search/' contains the results for the hyperparameter grid search. 'grid_search_length_cost/' contains the results for the length cost parameter search (also given different message lengths).
+Visualizations of the results can be found in the notebooks 'analysis_context.ipynb' (containing both emergence and inference results) and 'analysis_rsa.ipynb'. 

@@ -6,6 +6,7 @@ from utils.concept_reps import retrieve_messages_freq_rank, retrieve_concepts_co
 import torch
 from utils.load_results import load_interaction
 from language_analysis_local import MessageLengthHierarchical
+from utils.prep_corpus_data import determine_length
 
 
 def plot_heatmap(result_list,
@@ -332,7 +333,7 @@ def plot_heatmap_different_vs(result_list,
 def plot_frequency_x_message_length(paths, setting, n_runs, n_values, datasets, n_epochs=300, color=['b', 'r'],
                                     optimal_color='g', mean_runs=True, smoothing=False, std=False, frequency='message',
                                     plot_frequency=False, int='train', labels=None, fontsize=16, ylim=None, xlim=None,
-                                    yticks=None):
+                                    yticks=None, natural_language=False, linewidth=1, window=1):
     """ This function creates a plot showing the message length as a function of the frequency rank.
 
     :param paths: list
@@ -420,13 +421,14 @@ def plot_frequency_x_message_length(paths, setting, n_runs, n_values, datasets, 
                         ordered_frequencies_mean.append(sum(freq) / len(freq))
 
                 if labels:
-                    ax.plot(list(range(max_rank)), ordered_lengths_mean, color[si], label=labels[si])
+                    ax.plot(list(range(max_rank)), np.convolve(ordered_lengths_mean, np.ones(window)/window, mode='same'),
+                            color[si], label=labels[si], linewidth=linewidth)
                     if plot_frequency:
-                        ax2.plot(list(range(max_rank)), ordered_frequencies_mean, color[si], label=labels[si], ls='-.')
+                        ax2.plot(list(range(max_rank)), ordered_frequencies_mean, color[si], label=labels[si], ls='-.', linewidth=linewidth)
                 else:
-                    ax.plot(list(range(max_rank)), ordered_lengths_mean, color[si], label=s)
+                    ax.plot(list(range(max_rank)), ordered_lengths_mean, color[si], label=s, linewidth=linewidth)
                     if plot_frequency:
-                        ax2.plot(list(range(max_rank)), ordered_frequencies_mean, color[si], label=s, ls='-.')
+                        ax2.plot(list(range(max_rank)), ordered_frequencies_mean, color[si], label=s, ls='-.', linewidth=linewidth)
 
                 if std:
                     # calculate std:
@@ -436,20 +438,26 @@ def plot_frequency_x_message_length(paths, setting, n_runs, n_values, datasets, 
                              len(ordered_lengths_total[run]) > rank]
                         ordered_lengths_std.append(np.std(c))
                     ax.fill_between(list(range(max_rank)),
-                                    np.array(ordered_lengths_mean) - np.array(ordered_lengths_std),
-                                    np.array(ordered_lengths_mean) + np.array(ordered_lengths_std),
+                                    np.array(np.convolve(ordered_lengths_mean, np.ones(window)/window, mode='same'))
+                                    - np.array(np.convolve(ordered_lengths_std, np.ones(window)/window, mode='same')),
+                                    np.array(np.convolve(ordered_lengths_mean, np.ones(window)/window, mode='same'))
+                                    + np.array(np.convolve(ordered_lengths_std, np.ones(window)/window, mode='same')),
                                     color=color[si], alpha=0.3)
             else:
                 for olt in ordered_lengths_total:
-                    ax.plot(list(range(len(olt))), olt, color[si])
+                    ax.plot(list(range(len(olt))), olt.rolling(window=window), color[si], linewidth=linewidth)
                 if plot_frequency:
                     for oft in ordered_frequencies_total:
-                        ax2.plot(list(range(len(olt))), oft, color[si], ls='-.')
+                        ax2.plot(list(range(len(olt))), oft, color[si], ls='-.', linewidth=linewidth)
 
-        # optimal coding
-        # if optimal_color != None:
-        #    message_length_optimal = optimal_coding(vocab_size = (n_values[i] + 1)*3, nr_messages=max(max_rank_list))
-        #    ax.plot(list(range(len(message_length_optimal))),message_length_optimal,optimal_color,ls='--',label=f"optimal coding {n_values[i]} values")
+        if natural_language:
+            for l, language in enumerate(natural_language):
+                if labels[si+l+1] == 'Arabic':
+                    language = determine_length(language, arabic=True)
+                else:
+                    language = determine_length(language)
+                ax.plot(language.index, language['length'].rolling(window=window).mean(), label=labels[si+l+1], color=color[si+l+1],
+                        ls='dotted', linewidth=linewidth)
 
         ax.set_title(f"Dataset: {datasets[i]}", fontsize=fontsize+2)
         ax.legend(title='Message Length', fontsize=fontsize, loc='lower right', title_fontsize=fontsize+1)

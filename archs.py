@@ -5,14 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# try out different senders:
-# 1) a sender who only sees the targets
-# 2) a sender who receives the objects in random order and a vector of labels indicating which are the targets
-# 3) a sender who computes prototype embeddings over targets and distractors
-# 4) a sender who receives targets first, then distractors and is thus implicitly informed 
-# about which are the targets (used in Lazaridou et al. 2017)
-
-
 class Sender(nn.Module):
     """
     Sender gets as input targets and distractors in an ordered fashion (targets first).
@@ -161,58 +153,3 @@ class RSASender(nn.Module):
         overall_score = target_score - distractor_score
 
         return overall_score - self.cost_factor * cost
-
-
-class RSAReceiver(nn.Module):
-    """
-    The RSA receiver uses an internal speaker model which is an RSASender, i.e. a pragmatic speaker that produces
-    utterances based on their calculated utility. The pragmatic speaker has to be context-aware.
-
-    As a receiver, it gets as input a message from a speaker as well as targets and distractors in a random order. It
-    has to predict the correct labels for the input objects (i.e. target/distractor).
-    """
-
-    def __init__(self, internal_speaker):
-        """
-        internal_speaker: Trained speaker. Needs to be able to process one-hot encoded messages
-        """
-        super(RSAReceiver, self).__init__()
-        self.internal_speaker = internal_speaker
-
-    def forward(self, x, input, aux_input=None):
-        batch_size = x.shape[0]
-        n_obj = x.shape[1]
-        n_targets = int(n_obj / 2)
-        for i in range(batch_size):
-            for j in range(n_obj):
-        #    utility = self.calculate_utility(x, utterance)
-        # Repeat the utterance to match the batch size. All inputs in batch will be paired with the same utterance.
-                speaker_input = x[i][j].unsqueeze(0).repeat(batch_size, 1, 1)
-                message = self.internal_speaker(speaker_input)
-
-        # The pragmatic listener reasons about a pragmatic speaker.
-        # The pragmatic listener receives an utterance (input) and a set of objects (x).
-        # The prediction is made by inputting the utterance into the internal pragmatic speaker model and choosing the
-        # objects as targets accordingly.
-
-        # Now, it can happen that the objects output by the speaker are not exactly the same as the objects in x
-        # So, we need to compute some similarity score and output the most probable predictions based on that.
-
-        # The pragmatic listener reasons about a pragmatic speaker, i.e. wants to know for each conceivable state of the
-        # world the pragmatic speaker would choose which utterance
-        # pretend that state 1 is the state of the world and ask the pragmatic speaker what they would call it
-        # configure each possible state of the world
-        # the following assumes that the agents know that there are exactly 10 out of 20 targets
-        # predictions = list(itertools.combinations_with_replacement([0, 1], n_obj))
-        # # combine these predictions with the actual objects, i.e. put the objects in a target-first order that
-        # # corresponds to the labels
-        # for i, prediction in enumerate(predictions):
-        #     indices = np.where(prediction == 1)[0]
-        #     sorted = x[np.argsort(indices)]
-        #     best_utterance = self.pragmatic_speaker(sorted)
-        #     # compare the utterance to the actually produced utterance (input)
-        #     # using some similarity score? And if it exceeds a certain value, we settle for the prediction?
-
-        # How should the prediction look like? -1 and +1 ?
-        return input
-

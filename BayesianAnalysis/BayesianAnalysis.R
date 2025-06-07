@@ -238,3 +238,17 @@ describe_posterior(fit_lex_info, rope_range = rope_range(fit_lex_info))
 # main effect condition context-aware < context-unaware
 # main effect rsa: rsa < test
 # interaction condition:rsa
+
+## 5) Lexicon size-concept ratio
+fit_lex_size_ratio <- brm(lexsizeratio ~ condition * rsa + (1|dataset),
+                          data=lex_props,
+                          prior =
+                            c(prior(uniform(0, 1), class = Intercept, lb = 0, ub = 1),
+                              prior(uniform(0, 0.1), class = sigma, lb = 0, ub = 0.1)),
+                          # increasing adapt_delta because of few divergent transitions
+                          # after warmup
+                          control = list(adapt_delta = 0.99),
+                          file = "exp2/fit_lexsizeratio"
+                          )
+summary(fit_lex_size_ratio)
+describe_posterior(fit_lex_size_ratio, rope_range = rope_range(fit_lex_size_ratio))

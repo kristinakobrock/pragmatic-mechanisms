@@ -63,8 +63,12 @@ To speed up the RSA inference, the test dataset can be limited to a certain numb
 
 ## Evaluation
 
-Our results can be found in 'results/'. The subfolders contain the metrics for each run. We stored the final interaction for each run which logs all game-relevant information such as sender input, messages, receiver input, and receiver selections for the training and validation set. Based on these interactions, we evaluated additional metrics after training using the notebook 'evaluate_metrics.ipynb'. We uploaded all metrics but not the interaction files due to their large size.
+Our results can be found in `results/`. The subfolders contain the metrics for each run. We stored the final interaction for each run which logs all game-relevant information such as sender input, messages, receiver input, and receiver selections for the training and validation set. Based on these interactions, we evaluated additional metrics after training using the notebook `evaluate_metrics.ipynb`. We uploaded all metrics but not the interaction files due to their large size.
 
 ## Visualization
 
-Visualizations of the results can be found in the notebooks 'analysis_context.ipynb' (containing both emergence and inference results) and 'analysis_rsa.ipynb'. 
+Visualizations of the results can be found in the notebooks `analysis_context.ipynb` (containing both emergence and inference results) and `analysis_rsa.ipynb`. 
+
+## Statistical analyses
+
+Code to reproduce the Bayesian statistical analyses as well as saved models can be found in the subfolder `BayesianAnalysis`. The data for analysis are saved as csv files in the notebook `get_data_shared_context.ipynb`. These csv-files are loaded and used in the Bayesian analysis in the file `BayesianAnalysis.R`.

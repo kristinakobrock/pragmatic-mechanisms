@@ -9,6 +9,100 @@ from language_analysis_local import MessageLengthHierarchical
 from utils.prep_corpus_data import determine_length
 
 
+def plot_training_trajectory(results_train,
+                             results_val,
+                             message_length_train=None,
+                             message_length_val=None,
+                             steps=(1, 5),
+                             figsize=(10, 7),
+                             ylim=None,
+                             xlim=None,
+                             plot_indices=(1, 2, 3, 4, 5, 7),
+                             plot_shape=(3, 3),
+                             n_epochs=300,
+                             train_only=False,
+                             loss_plot=False,
+                             message_length_plot=False,
+                             titles=('D(3,4)', 'D(3,8)', 'D(3,16)', 'D(4,4)', 'D(4,8)', 'D(5,4)'),
+                             suptitle=None,
+                             legend1="Training",
+                             legend2="Validation",
+                             fontsize=16,
+                             color_train='blue',
+                             color_val='red',
+                             color_ml='green',
+                             dpi=100):
+    """ Plot the training trajectories for training and validation data"""
+    plt.figure(figsize=figsize, dpi=dpi)
+
+    for i, plot_idx in enumerate(plot_indices):
+        plt.subplot(plot_shape[0], plot_shape[1], plot_idx)
+        marker = '-'
+        x_range = range(0, n_epochs, steps[0])
+        plt.title(titles[i], fontsize=fontsize)
+        plt.yticks(fontsize=fontsize-1)
+        plt.xticks(fontsize=fontsize-1)
+
+        if message_length_plot:
+            for j in range(len(message_length_train[i])):
+                if j == 0:
+                    n_epochs = len(message_length_train[i][j])
+                else:
+                    if len(message_length_train[i][j]) > n_epochs:
+                        n_epochs = len(message_length_train[i][j])
+
+            # plot message_length_train[i]
+            for j in message_length_train[i]:
+                # so that the x_range fits with the epochs if they are different in each run
+                if len(j) != n_epochs:
+                    x_range = range(0, len(j), steps[0])
+                plt.plot(x_range, np.transpose(j), marker, color=color_ml)
+        else:
+            # plot results_train[i]
+            for j in results_train[i]:
+                # so that the x_range fits with the epochs if they are different in each run
+                if len(j) != n_epochs:
+                    x_range = range(0, len(j), steps[0])
+                plt.plot(x_range, np.transpose(j), marker, color=color_train)
+
+        if not train_only:
+            # plot results_train[i]
+            for j in results_val[i]:
+                # so that the x_range fits with the epochs if they are different in each run
+                if len(j) != n_epochs:
+                    x_range = range(0, len(j), steps[0])
+                plt.plot(x_range, np.transpose(j), marker, color=color_val)
+
+            # plt.plot(range(0, n_epochs, steps[1]), np.transpose(results_val[i]), marker, color='red')
+            plt.legend([legend1, legend2])
+            leg = plt.legend([legend1, legend2], fontsize=fontsize, loc='lower right')
+            leg.legendHandles[1].set_color('red')
+
+        plt.xlabel('Epoch', fontsize=fontsize)
+        if loss_plot:
+            plt.ylabel('Loss', fontsize=fontsize)
+        elif message_length_plot:
+            plt.ylabel('Message length', fontsize=fontsize)
+        else:
+            plt.ylabel('Accuracy', fontsize=fontsize)
+        if ylim:
+            plt.ylim(ylim)
+        if xlim:
+            plt.xlim(xlim)
+
+    if suptitle is None:
+        if loss_plot:
+            plt.suptitle('Loss trajectory', x=0.53, fontsize=fontsize+2)
+        elif message_length_plot:
+            plt.suptitle('Message length trajectory', x=0.53, fontsize=fontsize+2)
+        else:
+            plt.suptitle('Training trajectory', x=0.53, fontsize=fontsize+2)
+    else:
+        plt.suptitle(suptitle, x=0.53, fontsize=fontsize+2)
+
+    plt.tight_layout()
+
+
 def plot_heatmap(result_list,
                  mode,
                  plot_dims=(2, 2),
@@ -333,7 +427,7 @@ def plot_heatmap_different_vs(result_list,
 def plot_frequency_x_message_length(paths, setting, n_runs, n_values, datasets, n_epochs=300, color=['b', 'r'],
                                     optimal_color='g', mean_runs=True, smoothing=False, std=False, frequency='message',
                                     plot_frequency=False, int='train', labels=None, fontsize=16, ylim=None, xlim=None,
-                                    yticks=None, natural_language=False, linewidth=1, window=1):
+                                    yticks=None, natural_language=False, linewidth=1, window=1, dpi=100):
     """ This function creates a plot showing the message length as a function of the frequency rank.
 
     :param paths: list
@@ -352,7 +446,7 @@ def plot_frequency_x_message_length(paths, setting, n_runs, n_values, datasets, 
     """
 
     max_rank_list = []
-    fig, axes = plt.subplots(len(datasets), 1, figsize=(8, 4 * len(datasets)), sharex=True, sharey=True)
+    fig, axes = plt.subplots(len(datasets), 1, figsize=(8, 4 * len(datasets)), sharex=True, sharey=True, dpi=dpi)
 
     if len(datasets) == 1:
         axes = [axes]
@@ -481,7 +575,7 @@ def plot_frequency_x_message_length(paths, setting, n_runs, n_values, datasets, 
 
 def plot_frequency(paths, setting, n_runs, n_values, datasets, n_epochs=300, color=['b', 'r'], mean_runs=True,
                    std=False, frequency='message', int='train', labels=None, fontsize=16, ylim=None, yticks=None,
-                   xlim=None, natural_language=False, linewidth=1):
+                   xlim=None, natural_language=False, linewidth=1, dpi=100):
     """ This function creates a plot showing the relative as a function of the frequency rank.
 
     :param paths: list
@@ -497,7 +591,7 @@ def plot_frequency(paths, setting, n_runs, n_values, datasets, n_epochs=300, col
     """
 
     max_rank_list = []
-    fig, axes = plt.subplots(len(datasets), 1, figsize=(8, 4 * len(datasets)), sharex=True, sharey=True)
+    fig, axes = plt.subplots(len(datasets), 1, figsize=(8, 4 * len(datasets)), sharex=True, sharey=True, dpi=dpi)
 
     if len(datasets) == 1:
         axes = [axes]

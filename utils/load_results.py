@@ -24,7 +24,7 @@ def load_interaction(path, setting, run=0, n_epochs=300, int='train', rsa='testt
         path_to_interaction = (path_to_run + 'interactions/test/epoch_0/interaction_gpu0')
     else:
         path_to_interaction = (path_to_run + 'interactions/rsa_' + rsa + '/epoch_0/interaction_gpu0')
-    return torch.load(path_to_interaction)
+    return torch.load(path_to_interaction, weights_only=False)
 
 
 def load_accuracies(all_paths, n_runs=5, n_epochs=300, val_steps=10, zero_shot=False, context_unaware=False,
@@ -794,3 +794,28 @@ def load_accuracies_mu_and_goodman(all_paths, n_runs=5, n_epochs=300, val_steps=
         result_dict[key] = np.array(result_dict[key])
 
     return result_dict
+
+
+def load_ZLA_significance(paths,n_runs,setting):
+    """ load all data in the ZLA_significance.pkl file """
+    results_dict = {'mean_length':[],'mean_weighted_length':[],'p_ZLA':[],'message_length_context_dep':[],'message_length_context_x_concept':[],'message_length_frequency':[]}
+
+    for path_idx, path in enumerate(paths):
+        mean_length, mean_weighted_length, p_zla,ml_context_dep,ml_cxc, mlf = [], [], [], [], [], []
+
+        for run in range(n_runs):
+            data = pickle.load(open(path + '/' + setting + '/' + str(run) + '/ZLA_significance.pkl', 'rb'))
+            mean_length.append(data['mean_message_length'])
+            mean_weighted_length.append(data['mean_weighted_message_length'])
+            p_zla.append(data['p_zla'])
+            ml_context_dep.append(data['message_length_context_dep'])
+            ml_cxc.append(data['message_length_context_x_concept'])
+            mlf.append(data['message_length_frequency'])
+
+        results_dict['mean_length'].append(mean_length)
+        results_dict['mean_weighted_length'].append(mean_weighted_length)
+        results_dict['p_ZLA'].append(p_zla)
+        results_dict['message_length_context_dep'].append(ml_context_dep)
+        results_dict['message_length_context_x_concept'].append(ml_cxc)
+        results_dict['message_length_frequency'].append(mlf)
+    return results_dict

@@ -3,7 +3,8 @@
 .idea/
 *.pyc
 *.tar
-**/interaction*
+**/interactions*
+!interactions.zip
 *.ds
 *.tar
 .Rhistory

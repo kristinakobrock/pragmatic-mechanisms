@@ -5,7 +5,6 @@
 **/interactions*
 !interactions.zip
 *.ds
-*.tar
 .Rhistory
 BayesianAnalysis/LMAnalysis.R
 *.tiff

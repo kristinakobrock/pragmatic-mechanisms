@@ -2,8 +2,7 @@
 .DS_Store
 .idea/
 *.pyc
-!interactions.zip
-**/interactions*
+interactions/
 data/*.ds
 .Rhistory
 BayesianAnalysis/LMAnalysis.R
